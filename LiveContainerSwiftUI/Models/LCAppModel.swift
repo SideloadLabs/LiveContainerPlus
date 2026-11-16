@@ -1744,7 +1744,6 @@ class LCAppModel: ObservableObject, Hashable, @unchecked Sendable {
             return found
         }
     }
-}
     
     static func copy(fromApp: LCAppModel, toAppInfo: LCAppInfo) {
         // copy previous configration to new app
