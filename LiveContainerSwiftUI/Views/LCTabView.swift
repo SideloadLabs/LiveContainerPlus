@@ -14,6 +14,7 @@ struct LCTabView: View {
     @State var errorInfo = ""
     
     @EnvironmentObject var sharedModel : SharedModel
+    @ObservedObject private var theme = LCTheme.shared
     @EnvironmentObject var sceneDelegate: SceneDelegate
     @State var shouldToggleMainWindowOpen = false
     @Environment(\.scenePhase) var scenePhase
@@ -45,7 +46,7 @@ struct LCTabView: View {
                     if DataManager.shared.model.multiLCStatus != 2 {
                         sourcesView
                             .tabItem {
-                                Label("lc.tabView.sources".loc, systemImage: "books.vertical")
+                                Label("lc.tabView.sources".loc, systemImage: "books.vertical.fill")
                             }
                             .tag(LCTabIdentifier.sources)
                     }
@@ -57,13 +58,13 @@ struct LCTabView: View {
                     if DataManager.shared.model.multiLCStatus != 2 {
                         LCTweaksView()
                             .tabItem{
-                                Label("lc.tabView.tweaks".loc, systemImage: "wrench.and.screwdriver")
+                                Label("lc.tabView.tweaks".loc, systemImage: "wrench.and.screwdriver.fill")
                             }
                             .tag(LCTabIdentifier.tweaks)
                     }
                     LCUpdatesView()
                         .tabItem {
-                            Label("lc.tabView.updates".loc, systemImage: "arrow.down.circle")
+                            Label("lc.tabView.updates".loc, systemImage: "arrow.down.circle.fill")
                         }
                         .tag(LCTabIdentifier.updates)
                     
@@ -74,6 +75,17 @@ struct LCTabView: View {
                         .tag(LCTabIdentifier.settings)
                 }
         }
+        .tint(theme.accent)
+        .onAppear {
+            let appearance = UITabBarAppearance()
+            appearance.configureWithDefaultBackground()
+            UITabBar.appearance().standardAppearance = appearance
+            if #available(iOS 15.0, *) {
+                UITabBar.appearance().scrollEdgeAppearance = appearance
+            }
+        }
+
+        .animation(.easeInOut(duration: 0.2), value: theme.accentPreset)
         .downloadAlert(helper: downloadHelper)
         .environmentObject(downloadHelper)
         .alert("lc.common.error".loc, isPresented: $errorShow){

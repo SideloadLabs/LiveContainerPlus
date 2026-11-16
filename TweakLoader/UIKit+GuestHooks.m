@@ -216,6 +216,14 @@ static UIWindowLevel LCOverlayWindowLevel(void) {
     return (keyWindow ? keyWindow.windowLevel : UIWindowLevelNormal) + 1;
 }
 
+// iOS 27 beta 1 UIKit can lack this public iOS 27 property while guest apps already call it.
+static id LCUnavailableNavigationBarMinimization(UINavigationItem *self, SEL _cmd) {
+    return nil;
+}
+
+static void LCSetUnavailableNavigationBarMinimization(UINavigationItem *self, SEL _cmd, id value) {
+}
+
 __attribute__((constructor))
 static void UIKitGuestHooksInit(void) {
     //NSString *AppId = [NSUserDefaults lcGuestAppId];
@@ -233,6 +241,18 @@ static void UIKitGuestHooksInit(void) {
 static void Real_UIKitGuestHooksInit(void) {
     NSString *lcGuestAppId = NSUserDefaults.lcGuestAppId;
     if(!NSUserDefaults.lcGuestAppId) return;
+
+    if (@available(iOS 27.0, *)) {
+        Class navigationItemClass = UINavigationItem.class;
+        SEL getter = NSSelectorFromString(@"navigationBarMinimization");
+        SEL setter = NSSelectorFromString(@"setNavigationBarMinimization:");
+        if (![navigationItemClass instancesRespondToSelector:getter]) {
+            class_addMethod(navigationItemClass, getter, (IMP)LCUnavailableNavigationBarMinimization, "@@:");
+        }
+        if (![navigationItemClass instancesRespondToSelector:setter]) {
+            class_addMethod(navigationItemClass, setter, (IMP)LCSetUnavailableNavigationBarMinimization, "v@:@");
+        }
+    }
 
     // Always install these hooks (unless SideStore); each hook checks the live
     // value of LCForceLandscapeMode itself, so toggling the setting per app
@@ -1604,3 +1624,75 @@ static id<LCMultitaskXPCServiceProtocol> server;
 }
 
 @end
+
+// =============================================================================
+// LiveContainer Extended: Double-tap status bar → return to LiveContainer
+// Classic/guest process — use method swizzle (safe inside injected dylib)
+// =============================================================================
+
+@interface UIStatusBarManager (LCGuestDoubleTap)
+- (void)handleTapAction:(UIAction *)action;
+- (void)lc_handleTapAction:(UIAction *)action;
+@end
+
+@implementation UIStatusBarManager (LCGuestDoubleTap)
+
+- (void)lc_handleTapAction:(UIAction *)action {
+    static NSTimeInterval lastTap = 0;
+    static const NSTimeInterval kWindow = 0.35;
+
+    BOOL enabled = YES;
+    Class sharedUtils = NSClassFromString(@"LCSharedUtils");
+    NSString *groupId = nil;
+    if ([sharedUtils respondsToSelector:@selector(appGroupID)]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+        groupId = [sharedUtils performSelector:@selector(appGroupID)];
+#pragma clang diagnostic pop
+    }
+    NSUserDefaults *defs = groupId
+        ? [[NSUserDefaults alloc] initWithSuiteName:groupId]
+        : [NSUserDefaults standardUserDefaults];
+    if ([defs objectForKey:@"LCDoubleTapStatusBarToExit"] != nil) {
+        enabled = [defs boolForKey:@"LCDoubleTapStatusBarToExit"];
+    }
+
+    if (enabled) {
+        NSTimeInterval now = CFAbsoluteTimeGetCurrent();
+        if (lastTap > 0 && (now - lastTap) <= kWindow) {
+            lastTap = 0;
+            UIImpactFeedbackGenerator *gen =
+                [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleMedium];
+            [gen impactOccurred];
+            if ([sharedUtils respondsToSelector:@selector(launchToGuestAppWithClassicMode:)]) {
+                // classicMode 0 = relaunch LiveContainer
+                [sharedUtils launchToGuestAppWithClassicMode:0];
+            }
+            return; // consume double-tap
+        }
+        lastTap = now;
+    }
+
+    // Single tap → original implementation (swizzled)
+    [self lc_handleTapAction:action];
+}
+
+@end
+
+__attribute__((constructor))
+static void LCGuestDoubleTapStatusBarInit(void) {
+    // Only when running as a guest app inside LiveContainer
+    if (!NSUserDefaults.lcGuestAppId) return;
+
+    if (@available(iOS 16.0, *)) {
+        Class cls = NSClassFromString(@"UIStatusBarManager");
+        if (!cls) return;
+        // Use project swizzle() helper from utils.h
+        SEL orig = @selector(handleTapAction:);
+        SEL hook = @selector(lc_handleTapAction:);
+        if (class_getInstanceMethod(cls, orig) && class_getInstanceMethod(cls, hook)) {
+            swizzle(cls, orig, hook);
+        }
+    }
+}
+

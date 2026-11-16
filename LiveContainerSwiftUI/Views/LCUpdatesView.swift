@@ -128,7 +128,7 @@ struct LCUpdatesView: View {
                         .frame(maxWidth: .infinity, minHeight: 300)
 
                     } else {
-                        VStack(spacing: 8) {
+                        VStack(spacing: LCDesign.Spacing.list) {
                             ForEach(updateEntries) { entry in
                                 let bundleId         = entry.app.appInfo.bundleIdentifier() ?? ""
                                 let isQueued         = queuedBundleIds.contains(bundleId)
@@ -160,6 +160,7 @@ struct LCUpdatesView: View {
                         .padding(.bottom, 80)
                     }
                 }
+                .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
                 .navigationTitle("lc.tabView.updates".loc)
                 .modifier(UpdatesToolbarModifier(
                     isMultiSelectMode: $isMultiSelectMode,
@@ -589,6 +590,15 @@ private struct UpdatesUpdateAllButton: View {
     }
 }
 
+/// Subtle press feedback matching the app banner's run control.
+private struct LCPressScaleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.94 : 1)
+            .animation(.easeOut(duration: 0.18), value: configuration.isPressed)
+    }
+}
+
 private struct UpdateBannerView: View {
     let app: LCAppModel
     let newVersion: AltStoreSourceAppVersion
@@ -638,7 +648,11 @@ private struct UpdateBannerView: View {
 
     private var tintColor: Color  { dynamicColors ? mainColor      : Color("FontColor") }
     private var textColor: Color  { tintColor.readableTextColor() }
-    private var bgColor: Color    { dynamicColors ? mainColor.opacity(0.5) : Color("AppBannerBG") }
+    /// Icon-colour wash (same tokens as the app banner) over a neutral grouped surface.
+    private var washColor: Color  { dynamicColors ? mainColor : Color("FontColor") }
+    private var cardShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: LCDesign.Radius.card, style: .continuous)
+    }
 
     var body: some View {
         HStack {
@@ -646,28 +660,43 @@ private struct UpdateBannerView: View {
             HStack(spacing: 12) {
                 Image(uiImage: icon)
                     .resizable()
-                    .frame(width: 60, height: 60)
-                    .clipShape(RoundedRectangle(cornerSize: CGSize(width: 16, height: 16)))
+                    .frame(width: LCDesign.Size.icon, height: LCDesign.Size.icon)
+                    .clipShape(RoundedRectangle(cornerRadius: LCDesign.Radius.icon, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: LCDesign.Radius.icon, style: .continuous)
+                            .strokeBorder(Color.primary.opacity(colorScheme == .dark ? 0.14 : 0.08), lineWidth: 1)
+                    }
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(app.appInfo.displayName())
-                        .font(.system(size: 16)).bold()
-                        .foregroundColor(textColor)
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
 
                     Text("\(app.appInfo.version() ?? "?") → \(newVersion.version)  ·  \(app.appInfo.bundleIdentifier() ?? "")")
-                        .font(.system(size: 12))
-                        .foregroundColor(.gray)
+                        .font(.system(size: 12).monospacedDigit())
+                        .foregroundColor(.secondary)
                         .lineLimit(1)
 
                     if let container = app.uiSelectedContainer {
-                        Text(container.name)
-                            .font(.system(size: 12))
+                        // Folder name colour intentionally unchanged (blue).
+                        Label(container.name, systemImage: "folder.fill")
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundColor(.blue)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                RoundedRectangle(cornerRadius: LCDesign.Radius.chip, style: .continuous)
+                                    .fill(Color.blue.opacity(0.14))
+                            )
+                            .padding(.top, 3)
                     }
                     if let notes = newVersion.localizedDescription, !notes.isEmpty {
                         Text(notes)
                             .font(.system(size: 11))
-                            .foregroundColor(textColor.opacity(0.8))
+                            .foregroundColor(.secondary)
                             .lineLimit(2)
                     }
                 }
@@ -691,34 +720,42 @@ private struct UpdateBannerView: View {
             } else {
                 Button(action: onUpdate) {
                     Text("lc.updates.update".loc)
-                        .bold()
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
                         .lineLimit(1)
-                        .frame(height: 32)
-                        .padding(.horizontal, 16)
                         .minimumScaleFactor(0.1)
+                        .frame(width: LCDesign.Size.runButton.width, height: LCDesign.Size.runButton.height)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(LCPressScaleButtonStyle())
                 .background(Capsule().fill(tintColor))
                 .clipShape(Capsule())
                 .transition(.opacity)
             }
         }
-        .padding()
-        .frame(minHeight: 88)
+        .padding(.horizontal, LCDesign.Spacing.cardInset)
+        .padding(.vertical, 10)
+        .frame(minHeight: LCDesign.Size.bannerHeight)
         .animation(.easeInOut(duration: 0.2), value: isQueued)
         .animation(.easeInOut(duration: 0.2), value: isMultiSelectMode)
         .background {
-            RoundedRectangle(cornerSize: CGSize(width: 22, height: 22))
-                .fill(bgColor)
+            let alphas = LCDesign.washAlphas(isDark: colorScheme == .dark)
+            cardShape
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .overlay {
+                    cardShape.fill(LinearGradient(
+                        colors: [washColor.opacity(alphas.start), washColor.opacity(alphas.end)],
+                        startPoint: .leading, endPoint: .trailing))
+                }
+                .overlay {
+                    cardShape.strokeBorder(washColor.opacity(colorScheme == .dark ? 0.30 : 0.22), lineWidth: 1)
+                }
         }
         .overlay {
             if isMultiSelectMode && isSelected {
-                RoundedRectangle(cornerSize: CGSize(width: 22, height: 22))
-                    .stroke(tintColor, lineWidth: 2)
+                cardShape.stroke(tintColor, lineWidth: 2)
             }
         }
-        .contentShape(RoundedRectangle(cornerSize: CGSize(width: 22, height: 22)))
+        .contentShape(cardShape)
         .onTapGesture {
             if isMultiSelectMode {
                 onToggleSelect()

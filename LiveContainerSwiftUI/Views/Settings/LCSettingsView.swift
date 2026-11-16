@@ -36,11 +36,13 @@ enum LCAppListInterfaceStyle : Int, CaseIterable, Identifiable {
     var id: Int { rawValue }
     case list = 0
     case grid = 1
+    case compact = 2
     
     var displayName: String {
         switch self {
         case .list: "lc.settings.interface.list".loc
         case .grid: "lc.settings.interface.grid".loc
+        case .compact: "lc.settings.interface.compact".loc
         }
     }
 }
@@ -66,6 +68,7 @@ struct LCSettingsView: View {
     @AppStorage("darkModeIcon", store: LCUtils.appGroupUserDefault) var darkModeIcon = false
     @AppStorage("LCAppListInterfaceStyle", store: LCUtils.appGroupUserDefault) var appListInterfaceStyle: LCAppListInterfaceStyle = .list
     @AppStorage("LCAppGridShowLabels", store: LCUtils.appGroupUserDefault) var appGridShowLabels = false
+    @ObservedObject private var theme = LCTheme.shared
     
     @AppStorage("LCSideJITServerAddress", store: LCUtils.appGroupUserDefault) var sideJITServerAddress : String = ""
     @AppStorage("LCDeviceUDID", store: LCUtils.appGroupUserDefault) var deviceUDID: String = ""
@@ -264,6 +267,9 @@ struct LCSettingsView: View {
                             Text("lc.settings.interface.showAppLabels".loc)
                         }
                     }
+                    Toggle(isOn: $theme.doubleTapStatusBarToExit) {
+                        Text("lc.settings.interface.doubleTapStatusBarToExit".loc)
+                    }
                 } header: {
                     Text("lc.settings.interface".loc)
                 } footer: {
@@ -359,73 +365,25 @@ struct LCSettingsView: View {
                     Text("About Fork and the Fork's Owner")
                 }
                 
-                VStack{
-                    Text(LCUtils.getVersionInfo())
-                        .foregroundStyle(.gray)
-                        .onTapGesture(count: 5) {
-                            sharedModel.developerMode.toggle()
-                        }
-                }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .background(Color(UIColor.systemGroupedBackground))
-                    .listRowInsets(EdgeInsets())
+                Text(LCUtils.getVersionInfo())
+                    .foregroundStyle(.gray)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .center)
+                    .contentShape(Rectangle())
+                    .listRowBackground(Color.clear)
+                    .onTapGesture(count: 5) {
+                        withAnimation { sharedModel.developerMode = true }
+                    }
                 
                 if sharedModel.developerMode {
-                    Section {
-                        Toggle(isOn: $injectToLCItelf) {
-                            Text("lc.settings.injectLCItself".loc)
-                        }
-                        Toggle(isOn: $ignoreJITOnLaunch) {
-                            Text("Ignore JIT on Launching App")
-                        }
-                        Toggle(isOn: $keepSelectedWhenQuit) {
-                            Text("Keep Selected App when Quit")
-                        }
-                        Toggle(isOn: $waitForDebugger) {
-                            Text("Wait For Debugger")
-                        }
-                        Toggle(isOn: $sharePrivateDataWithLiveProcess) {
-                            Text("Allow Private Data access from LiveProcess")
-                        }
-                        Toggle(isOn: $disableLiveProcessWatchdog) {
-                            Text("Disable LiveProcess watchdog termination")
-                        }
-                        Button {
-                            export()
-                        } label: {
-                            Text("Export Cert")
-                        }
-                        Button {
-                            exportDyld()
-                        } label: {
-                            Text("Export Dyld")
-                        }
-                        Button {
-                            Task { await nukeSideStore() }
-                        } label: {
-                            Text("Nuke SideStore")
-                        }
-                        Button {
-                            exportMainBundle()
-                        } label: {
-                            Text("Export Main Bundle")
-                        }
-                        Button {
-                            resetSymbolOffsets()
-                        } label: {
-                            Text("Reset Symbol Offsets")
-                        }
-                        Button {
-                            presentFLEXOverlay()
-                        } label: {
-                            Text("Show FLEX Overlay")
-                        }
-                        .disabled(NSClassFromString("FLEXManager") == nil)
-                    } header: {
-                        Text("Developer Settings")
-                    } footer: {
-                        Text("lc.settings.injectLCItselfDesc".loc)
-                    }
+                    LCDeveloperSettingsSection(
+                        onExportCert: { export() },
+                        onExportDyld: { exportDyld() },
+                        onNukeSideStore: { Task { await nukeSideStore() } },
+                        onExportMainBundle: { exportMainBundle() },
+                        onResetSymbolOffsets: { resetSymbolOffsets() },
+                        onShowFLEX: { presentFLEXOverlay() },
+                        onHide: { withAnimation { sharedModel.developerMode = false } }
+                    )
                 }
             }
             .navigationBarTitle("lc.tabView.settings".loc)

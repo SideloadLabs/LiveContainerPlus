@@ -103,6 +103,7 @@ struct LiveContainerSwiftUIApp : SwiftUI.App {
         DataManager.shared.model.appDataFolderNames = tempAppDataFolderNames
         DataManager.shared.model.tweakFolderNames = tempTweakFolderNames
         DataManager.shared.model.syncSharedGuestURLIndex()
+        LCPath.reconcileBackupPolicy()
     }
     
     var body: some Scene {

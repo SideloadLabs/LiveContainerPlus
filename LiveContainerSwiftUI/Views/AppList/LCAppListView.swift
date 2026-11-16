@@ -476,6 +476,18 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 .hidden()
                 .disabled(isMultiSelectMode)
                 
+                if sharedModel.multiLCStatus != 2 && !isMultiSelectMode {
+                    LCDashboardHeaderView(
+                        onRefreshAll: { LCUtils.openSideStore(delegate: self) },
+                        onOpenSideStore: { LCUtils.openSideStore(delegate: self) },
+                        onInstallIPA: { choosingIPA = true },
+                        onInstallURL: { Task { await startInstallFromUrl() } },
+                        onOpenSettings: { sharedModel.selectedTab = .settings }
+                    )
+                    .padding(.horizontal)
+                    .padding(.bottom, 4)
+                }
+                
                 appList(apps: filteredApps, hidden: false, gridID: "apps")
                     .padding()
                     .animation(searchContext.isTyping ? nil : .easeInOut, value: filteredApps)
@@ -483,11 +495,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 VStack {
                     if sharedModel.hiddenApps.count > 0 {
                         VStack(spacing: 8) {
-                            HStack {
-                                Text("lc.appList.hiddenApps".loc)
-                                    .font(.system(.title2).bold())
-                                Spacer()
-                            }
+                            LCSectionHeader(title: "lc.appList.hiddenApps".loc, systemImage: "eye.slash")
                             appList(apps: filteredHiddenApps, hidden: !sharedModel.isHiddenAppUnlocked, gridID: "hiddenApps")
                             .animation(.easeInOut, value: sharedModel.isHiddenAppUnlocked)
                             .onTapGesture {
@@ -534,7 +542,8 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                     onAppear()
                 }
             }
-            
+            // Grouped background so the secondary-grouped cards read as raised surfaces.
+            .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
             .navigationTitle("lc.appList.myApps".loc)
             .toolbar {
                 // Leading: search / spinner / SideStore / Help — the second
@@ -2043,10 +2052,12 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
             }
             .onDrop(of: [.text], delegate: LCGridDropDelegate(apps: apps, appFrames: appFrames, draggingApp: $draggingApp, dragCleanupID: $dragCleanupID, sortManager: sharedAppSortManager))
         } else {
-            VStack(spacing: 8) {
+            VStack(spacing: appListInterfaceStyle == .compact ? 8 : LCDesign.Spacing.list) {
                 ForEach(apps, id: \.self) { app in
                     if hidden {
                         LCAppSkeletonBanner()
+                    } else if appListInterfaceStyle == .compact {
+                        compactRow(app: app)
                     } else {
                         appRow(app: app, isHidden: gridID == "hiddenApps")
                     }
@@ -2063,6 +2074,48 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
         return [uniqueIdentifier: proxy.frame(in: .named(coordinateSpace))]
     }
     
+    @ViewBuilder
+    func compactRow(app: LCAppModel) -> some View {
+        ZStack(alignment: .leading) {
+            LCAppCompactRow(
+                appModel: app,
+                onLaunch: {
+                    Task {
+                        do { try await app.runApp() } catch {
+                            errorInfo = "\(error)"
+                            errorShow = true
+                        }
+                    }
+                },
+                onOpenSettings: { openNavigationView(view: AnyView(LCAppSettingsView(model: app))) },
+                onRemove: { removeApp(app: app) }
+            )
+            .padding(.leading, isMultiSelectMode ? 36 : 0)
+            .animation(.easeInOut(duration: 0.2), value: isMultiSelectMode)
+            .allowsHitTesting(!isMultiSelectMode && !isDeleting)
+
+            if isMultiSelectMode {
+                let isSelected = selectedAppsForDeletion.contains(app)
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(isSelected ? .green : .secondary)
+                    .font(.title2)
+                    .padding(.leading, 6)
+                    .transition(.opacity.combined(with: .move(edge: .leading)))
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard isMultiSelectMode, !isDeleting else { return }
+            withAnimation(.easeInOut(duration: 0.1)) {
+                if selectedAppsForDeletion.contains(app) {
+                    selectedAppsForDeletion.remove(app)
+                } else {
+                    selectedAppsForDeletion.insert(app)
+                }
+            }
+        }
+    }
+
     @ViewBuilder
     func appRow(app: LCAppModel, isHidden: Bool) -> some View {
         VStack(spacing: 0) {
