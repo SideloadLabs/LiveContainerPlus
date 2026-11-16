@@ -8,7 +8,14 @@
 
 BOOL isolateAppGroup = NO;
 BOOL strictTestMode = NO;
+static NSString *extensionParentContainerPath;
 void* webKitHeader = 0;
+
+void NSFMGuestExtensionHooksInit(NSString *parentContainerPath) {
+    extensionParentContainerPath = parentContainerPath;
+    isolateAppGroup = [NSUserDefaults.guestContainerInfo[@"isolateAppGroup"] boolValue];
+    swizzle(NSFileManager.class, @selector(containerURLForSecurityApplicationGroupIdentifier:), @selector(hook_containerURLForSecurityApplicationGroupIdentifier:));
+}
 
 static NSString *LCSanitizedGroupIdentifier(NSString *groupIdentifier) {
     if (![groupIdentifier isKindOfClass:NSString.class] || groupIdentifier.length == 0) {
@@ -35,7 +42,7 @@ static NSString *LCSanitizedGroupIdentifier(NSString *groupIdentifier) {
 
 static NSURL *LCBaseGroupContainerURL(void) {
     if (isolateAppGroup) {
-        NSString *homePath = [NSString stringWithUTF8String:getenv("HOME") ?: ""];
+        NSString *homePath = extensionParentContainerPath ?: [NSString stringWithUTF8String:getenv("HOME") ?: ""];
         return [NSURL fileURLWithPath:[homePath stringByAppendingPathComponent:@"LCAppGroup"] isDirectory:YES];
     }
     if (NSUserDefaults.lcAppGroupPath.length > 0) {
@@ -90,7 +97,7 @@ void NSFMGuestHooksInit(void) {
         LCEnsureGroupContainerScaffold(appGroupURL);
         return appGroupURL;
     }
-    NSString *safeGroupIdentifier = LCSanitizedGroupIdentifier(groupIdentifier);
+NSString *safeGroupIdentifier = LCSanitizedGroupIdentifier(groupIdentifier);
     NSURL *baseURL = LCBaseGroupContainerURL();
     [NSFileManager.defaultManager createDirectoryAtURL:baseURL withIntermediateDirectories:YES attributes:nil error:nil];
     NSURL *result = [baseURL URLByAppendingPathComponent:safeGroupIdentifier isDirectory:YES];

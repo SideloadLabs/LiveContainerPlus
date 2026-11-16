@@ -12,11 +12,13 @@ void NUDGuestHooksInit(void);
 void SecItemGuestHooksInit(void);
 void DyldHooksInit(bool hideLiveContainer, bool hookDlopen, uint32_t spoofSDKVersion);
 void NSFMGuestHooksInit(void);
+void NSFMGuestExtensionHooksInit(NSString *parentContainerPath);
 void NSURLSCGuestHooksInit(void);
 void initDead10ccFix(void);
 void IDFVHookInit(NSUUID* uuid);
-// Device spoofing
 void DeviceSpoofingGuestHooksInit(void);
+void NSExtensionGuestHooksInit(NSURL *appURL, NSURL *containerURL);
+void GuestExtensionHooksInit(void);
 
 @interface NSBundle(LiveContainer)
 - (instancetype)initWithPathForMainBundle:(NSString *)path;

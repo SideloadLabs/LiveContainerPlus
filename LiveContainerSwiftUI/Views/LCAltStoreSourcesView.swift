@@ -155,8 +155,11 @@ final class AltStoreSourcesViewModel: ObservableObject {
     private let defaultsKey = "LCAltStoreSourceURLs"
 
     private let cacheDirectoryName = "AltStoreSourceCache"
+    private var hasLoadedSources = false
     
-    init() {
+    func loadSourcesIfNeeded() {
+        guard !hasLoadedSources else { return }
+        hasLoadedSources = true
         loadStoredSources()
         Task {
             await refreshAllSources()
@@ -661,12 +664,25 @@ struct LCSourcesView: View {
         .searchable(text: $searchContext.query, placement: .navigationBarDrawer(displayMode: .always), prompt: Text("lc.sources.searchPrompt".loc))
 
         .onAppear {
+            if sharedModel.selectedTab == .sources {
+                viewModel.loadSourcesIfNeeded()
+            }
+            expandedSources = []
             if !isViewAppeared {
                 guard sharedModel.selectedTab == .sources, let link = sharedModel.deepLink else { return }
                 sharedModel.deepLink = nil
                 handleURL(url: link)
                 isViewAppeared = true
             }
+        }
+        .onChange(of: sharedModel.selectedTab) { tab in
+            if tab == .sources {
+                viewModel.loadSourcesIfNeeded()
+            }
+        }
+        .onChange(of: viewModel.sources) { newSources in
+            let newSet = Set(newSources.map { $0.id })
+            expandedSources = expandedSources.intersection(newSet)
         }
         .onChange(of: sharedModel.deepLink) { link in
             guard sharedModel.selectedTab == .sources, let link else { return }
