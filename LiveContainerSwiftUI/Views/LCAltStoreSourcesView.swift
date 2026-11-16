@@ -584,11 +584,7 @@ struct LCSourcesView: View {
                                 }
                             }
                         } header: {
-                            HStack {
-                                Text("lc.sources.sectionHeader".loc)
-                                Spacer()
-                                Text("\(viewModel.sources.count)")
-                            }
+                            sourcesSectionHeader
                         }
                     }
                     .listStyle(.insetGrouped)
@@ -679,10 +675,6 @@ struct LCSourcesView: View {
                 viewModel.loadSourcesIfNeeded()
             }
         }
-        .onChange(of: viewModel.sources) { newSources in
-            let newSet = Set(newSources.map { $0.id })
-            expandedSources = expandedSources.intersection(newSet)
-        }
         .onChange(of: sharedModel.deepLink) { link in
             guard sharedModel.selectedTab == .sources, let link else { return }
             sharedModel.deepLink = nil
@@ -690,6 +682,14 @@ struct LCSourcesView: View {
         }
     }
     
+    private var sourcesSectionHeader: some View {
+        HStack {
+            Text("lc.sources.sectionHeader".loc)
+            Spacer()
+            Text("\(viewModel.sources.count)")
+        }
+    }
+
     private var emptyStateView: some View {
         VStack(spacing: 12) {
             Image(systemName: "link.badge.plus")
