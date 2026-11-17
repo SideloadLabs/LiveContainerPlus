@@ -532,9 +532,17 @@ struct LCSourcesView: View {
         NavigationView {
             Group {
                 if viewModel.sources.isEmpty {
-                    emptyStateView
+                    VStack(spacing: 0) {
+                        sourcesChromeHeader
+                        emptyStateView
+                    }
                 } else {
                     List {
+                        Section {
+                            sourcesChromeHeader
+                                .listRowInsets(EdgeInsets())
+                                .listRowBackground(Color.clear)
+                        }
                         Section {
                             NavigationLink {
                                 LCSourceDetailView(
@@ -688,6 +696,13 @@ struct LCSourcesView: View {
             Spacer()
             Text("\(viewModel.sources.count)")
         }
+    }
+
+    private var sourcesChromeHeader: some View {
+        LCChromeHeader(
+            title: "lc.tabView.sources".loc,
+            subtitle: "AltStore / SideStore repositories"
+        )
     }
 
     private var emptyStateView: some View {

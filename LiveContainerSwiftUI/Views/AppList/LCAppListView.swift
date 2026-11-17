@@ -305,7 +305,17 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     
     @AppStorage("LCMultitaskMode", store: LCUtils.appGroupUserDefault) var multitaskMode: MultitaskMode = .virtualWindow
     @AppStorage("LCLaunchInMultitaskMode") var launchInMultitaskMode = false
-    @AppStorage("LCAppListInterfaceStyle", store: LCUtils.appGroupUserDefault) var appListInterfaceStyle: LCAppListInterfaceStyle = .list
+    @ObservedObject private var theme = LCTheme.shared
+    /// Single source of truth for the apps layout is LCTheme.appLayout (List / Grid / Compact),
+    /// switched from the apps header or Settings.
+    private var appListInterfaceStyle: LCAppListInterfaceStyle {
+        switch theme.appLayout {
+        case .list: return .list
+        case .grid: return .grid
+        case .compact: return .compact
+        case .springboard: return .list   // handled separately in appList(...)
+        }
+    }
     @AppStorage("LCAppGridShowLabels", store: LCUtils.appGroupUserDefault) var appGridShowLabels = false
     @AppStorage("darkModeIcon", store: LCUtils.appGroupUserDefault) private var darkModeIcon = false
     
@@ -477,15 +487,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 .disabled(isMultiSelectMode)
                 
                 if sharedModel.multiLCStatus != 2 && !isMultiSelectMode {
-                    LCDashboardHeaderView(
-                        onRefreshAll: { LCUtils.openSideStore(delegate: self) },
-                        onOpenSideStore: { LCUtils.openSideStore(delegate: self) },
-                        onInstallIPA: { choosingIPA = true },
-                        onInstallURL: { Task { await startInstallFromUrl() } },
-                        onOpenSettings: { sharedModel.selectedTab = .settings }
-                    )
-                    .padding(.horizontal)
-                    .padding(.bottom, 4)
+                    LCAppsSectionHeader(appCount: filteredApps.count)
                 }
                 
                 appList(apps: filteredApps, hidden: false, gridID: "apps")
@@ -673,11 +675,11 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                                 }
                             }
                             .onChange(of: sharedAppSortManager.appSortType) { newValue in
-                                if sharedAppSortManager.appSortType == .custom && appListInterfaceStyle != .grid {
+                                if sharedAppSortManager.appSortType == .custom {
                                     customSortViewPresent = true
                                 }
                             }
-                            if sharedAppSortManager.appSortType == .custom && appListInterfaceStyle != .grid {
+                            if sharedAppSortManager.appSortType == .custom {
                                 Divider()
                                 Button {
                                     customSortViewPresent = true
@@ -2010,47 +2012,31 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     
     @ViewBuilder
     func appList(apps: [LCAppModel], hidden: Bool, gridID: String) -> some View {
-        if appListInterfaceStyle == .grid {
-            let isHiddenAppGrid = gridID == "hiddenApps"
-            let gridCoordinateSpace = isHiddenAppGrid ? "LCHiddenAppGrid" : "LCVisibleAppGrid"
-            let appFrames = isHiddenAppGrid ? hiddenGridAppFrames : visibleGridAppFrames
-            
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: gridItemWidth), spacing: gridSpacing)], spacing: appGridShowLabels ? 32 : 22) {
+        if theme.appLayout == .springboard {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 16)], spacing: 20) {
                 ForEach(apps, id: \.self) { app in
                     if hidden {
-                        LCAppSkeletonIcon(showLabels: appGridShowLabels)
+                        LCAppSkeletonIcon(showLabels: true)
                     } else {
-                        LCAppBanner(appModel: app, delegate: self, appDataFolders: $sharedModel.appDataFolderNames, tweakFolders: $sharedModel.tweakFolderNames, interfaceStyle: .grid) { _ in
-                            cancelGridDrag(draggingApp: $draggingApp, cleanupID: $dragCleanupID)
-                        }
-                        .onDrag {
-                            draggingApp = app
-                            scheduleGridDragCleanup(draggingApp: $draggingApp, cleanupID: $dragCleanupID, delay: 30)
-                            return NSItemProvider(object: NSString(string: sharedAppSortManager.getUniqueIdentifier(for: app) ?? app.displayName))
-                        } preview: {
-                            IconImageView(icon: app.appInfo.iconIsDarkIcon(LCUtils.appGroupUserDefault.bool(forKey: "darkModeIcon")))
-                                .frame(width: appGridShowLabels ? 72 : 84, height: appGridShowLabels ? 72 : 84)
-                        }
-                        .background {
-                            GeometryReader { proxy in
-                                Color.clear
-                                    .preference(key: LCGridAppFramePreferenceKey.self, value: gridFramePreference(for: app, proxy: proxy, coordinateSpace: gridCoordinateSpace))
-                            }
-                        }
+                        springboardCell(app: app)
                     }
                 }
                 .transition(.scale)
             }
-            .coordinateSpace(name: gridCoordinateSpace)
             .frame(maxWidth: .infinity)
-            .onPreferenceChange(LCGridAppFramePreferenceKey.self) { value in
-                if isHiddenAppGrid {
-                    hiddenGridAppFrames = value
-                } else {
-                    visibleGridAppFrames = value
+            .padding(.top, 8)
+        } else if appListInterfaceStyle == .grid {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                ForEach(apps, id: \.self) { app in
+                    if hidden {
+                        LCAppSkeletonBanner()
+                    } else {
+                        gridCell(app: app)
+                    }
                 }
+                .transition(.scale)
             }
-            .onDrop(of: [.text], delegate: LCGridDropDelegate(apps: apps, appFrames: appFrames, draggingApp: $draggingApp, dragCleanupID: $dragCleanupID, sortManager: sharedAppSortManager))
+            .frame(maxWidth: .infinity)
         } else {
             VStack(spacing: appListInterfaceStyle == .compact ? 8 : LCDesign.Spacing.list) {
                 ForEach(apps, id: \.self) { app in
@@ -2074,6 +2060,86 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
         return [uniqueIdentifier: proxy.frame(in: .named(coordinateSpace))]
     }
     
+    @ViewBuilder
+    func springboardCell(app: LCAppModel) -> some View {
+        ZStack(alignment: .topLeading) {
+            LCSpringBoardAppCell(
+                appModel: app,
+                onLaunch: {
+                    Task {
+                        do { try await app.runApp() } catch {
+                            errorInfo = "\(error)"
+                            errorShow = true
+                        }
+                    }
+                },
+                onOpenSettings: { openNavigationView(view: AnyView(LCAppSettingsView(model: app))) },
+                onRemove: { removeApp(app: app) }
+            )
+            .allowsHitTesting(!isMultiSelectMode && !isDeleting)
+
+            if isMultiSelectMode {
+                let isSelected = selectedAppsForDeletion.contains(app)
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(isSelected ? .green : .secondary)
+                    .font(.title3)
+                    .padding(2)
+                    .transition(.opacity)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard isMultiSelectMode, !isDeleting else { return }
+            withAnimation(.easeInOut(duration: 0.1)) {
+                if selectedAppsForDeletion.contains(app) {
+                    selectedAppsForDeletion.remove(app)
+                } else {
+                    selectedAppsForDeletion.insert(app)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    func gridCell(app: LCAppModel) -> some View {
+        ZStack(alignment: .topLeading) {
+            LCAppGridCell(
+                appModel: app,
+                onLaunch: {
+                    Task {
+                        do { try await app.runApp() } catch {
+                            errorInfo = "\(error)"
+                            errorShow = true
+                        }
+                    }
+                },
+                onOpenSettings: { openNavigationView(view: AnyView(LCAppSettingsView(model: app))) },
+                onRemove: { removeApp(app: app) }
+            )
+            .allowsHitTesting(!isMultiSelectMode && !isDeleting)
+
+            if isMultiSelectMode {
+                let isSelected = selectedAppsForDeletion.contains(app)
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(isSelected ? .green : .secondary)
+                    .font(.title2)
+                    .padding(8)
+                    .transition(.opacity)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard isMultiSelectMode, !isDeleting else { return }
+            withAnimation(.easeInOut(duration: 0.1)) {
+                if selectedAppsForDeletion.contains(app) {
+                    selectedAppsForDeletion.remove(app)
+                } else {
+                    selectedAppsForDeletion.insert(app)
+                }
+            }
+        }
+    }
+
     @ViewBuilder
     func compactRow(app: LCAppModel) -> some View {
         ZStack(alignment: .leading) {

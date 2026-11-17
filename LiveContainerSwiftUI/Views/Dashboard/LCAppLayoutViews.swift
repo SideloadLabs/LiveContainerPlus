@@ -11,9 +11,7 @@ import SwiftUI
 
 struct LCAppsSectionHeader: View {
     @ObservedObject private var theme = LCTheme.shared
-    @EnvironmentObject private var sortManager: LCAppSortManager
     var appCount: Int
-    var onManageCustomSort: () -> Void
     
     var body: some View {
         HStack(spacing: 10) {
@@ -51,40 +49,6 @@ struct LCAppsSectionHeader: View {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .stroke(theme.cardBorder, lineWidth: 1)
             )
-            
-            // Sort menu (parity with original toolbar)
-            Menu {
-                Picker("Sort by", selection: $sortManager.appSortType) {
-                    ForEach(AppSortType.allCases, id: \.self) { sortType in
-                        Label(sortType.displayName, systemImage: sortType.systemImage)
-                            .tag(sortType)
-                    }
-                }
-                if sortManager.appSortType == .custom {
-                    Divider()
-                    Button {
-                        onManageCustomSort()
-                    } label: {
-                        Label("Manage custom order", systemImage: "slider.horizontal.3")
-                    }
-                }
-            } label: {
-                Image(systemName: "arrow.up.arrow.down")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(theme.secondaryText)
-                    .frame(width: 34, height: 34)
-                    .background(theme.cardBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .stroke(theme.cardBorder, lineWidth: 1)
-                    )
-            }
-            .onChange(of: sortManager.appSortType) { newValue in
-                if newValue == .custom {
-                    onManageCustomSort()
-                }
-            }
         }
         .padding(.horizontal, 16)
         .padding(.top, 6)
@@ -294,6 +258,60 @@ struct LCAppCompactRow: View {
             .lcThemeCard(radius: 12)
         }
         .buttonStyle(.plain)
+        .lcAppContextMenu(appModel: appModel, onOpenSettings: onOpenSettings, onRemove: onRemove)
+    }
+}
+
+
+// MARK: - SpringBoard-style icon cell (tap to launch, long-press menu)
+
+struct LCSpringBoardAppCell: View {
+    @ObservedObject var appModel: LCAppModel
+    @ObservedObject private var theme = LCTheme.shared
+    @AppStorage("darkModeIcon", store: LCUtils.appGroupUserDefault) private var darkModeIcon = false
+    var onLaunch: () -> Void
+    var onOpenSettings: () -> Void
+    var onRemove: () -> Void
+    @State private var pressed = false
+    
+    var body: some View {
+        VStack(spacing: 6) {
+            Group {
+                if let img = appModel.appInfo.iconIsDarkIcon(darkModeIcon) {
+                    Image(uiImage: img)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } else {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(theme.accent.opacity(0.2))
+                        .overlay(
+                            Text(String(appModel.displayName.prefix(1)))
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundStyle(theme.accent)
+                        )
+                }
+            }
+            .frame(width: 60, height: 60)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .scaleEffect(pressed ? 0.90 : 1.0)
+            .animation(.spring(response: 0.28, dampingFraction: 0.65), value: pressed)
+            
+            Text(appModel.displayName)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .frame(width: 72)
+        }
+        .frame(width: 76)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            pressed = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                pressed = false
+                onLaunch()
+            }
+        }
         .lcAppContextMenu(appModel: appModel, onOpenSettings: onOpenSettings, onRemove: onRemove)
     }
 }

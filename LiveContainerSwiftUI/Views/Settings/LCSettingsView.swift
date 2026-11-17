@@ -66,8 +66,6 @@ struct LCSettingsView: View {
     @AppStorage("LCDontSignApp", store: LCUtils.appGroupUserDefault) var dontSignApp = false
     @AppStorage("dynamicColors", store: LCUtils.appGroupUserDefault) var dynamicColors = true
     @AppStorage("darkModeIcon", store: LCUtils.appGroupUserDefault) var darkModeIcon = false
-    @AppStorage("LCAppListInterfaceStyle", store: LCUtils.appGroupUserDefault) var appListInterfaceStyle: LCAppListInterfaceStyle = .list
-    @AppStorage("LCAppGridShowLabels", store: LCUtils.appGroupUserDefault) var appGridShowLabels = false
     @ObservedObject private var theme = LCTheme.shared
     
     @AppStorage("LCSideJITServerAddress", store: LCUtils.appGroupUserDefault) var sideJITServerAddress : String = ""
@@ -99,6 +97,14 @@ struct LCSettingsView: View {
     var body: some View {
         NavigationView {
             Form {
+                Section {
+                    LCChromeHeader(
+                        title: "lc.tabView.settings".loc,
+                        subtitle: "Signing · Appearance · Runtime"
+                    )
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                }
                 if sharedModel.multiLCStatus != 2 {
                     Section{
                         if !certificateDataFound {
@@ -255,18 +261,73 @@ struct LCSettingsView: View {
                             Text("lc.settings.darkModeIcon".loc)
                         }
                     }
-                    Picker(selection: $appListInterfaceStyle) {
-                        ForEach(LCAppListInterfaceStyle.allCases) { interfaceStyle in
-                            Text(interfaceStyle.displayName).tag(interfaceStyle)
+                    // Accent colour
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Accent Color")
+                                .font(.system(size: 15, weight: .semibold))
+                            Spacer()
+                            Text(theme.accentPreset.rawValue)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(theme.accent)
+                                .id(theme.accentPreset)
                         }
-                    } label: {
-                        Text("lc.settings.interface.appLayout".loc)
-                    }
-                    if appListInterfaceStyle == .grid {
-                        Toggle(isOn: $appGridShowLabels) {
-                            Text("lc.settings.interface.showAppLabels".loc)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 10) {
+                                ForEach(LCAccentPreset.allCases) { preset in
+                                    Button {
+                                        withAnimation(.easeInOut(duration: 0.15)) {
+                                            theme.setAccent(preset)
+                                        }
+                                    } label: {
+                                        ZStack {
+                                            Circle()
+                                                .fill(preset.color)
+                                                .frame(width: 28, height: 28)
+                                            if theme.accentPreset == preset {
+                                                Circle()
+                                                    .strokeBorder(Color.white, lineWidth: 2)
+                                                    .frame(width: 28, height: 28)
+                                                Image(systemName: "checkmark")
+                                                    .font(.system(size: 11, weight: .bold))
+                                                    .foregroundStyle(.white)
+                                            }
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel(preset.rawValue)
+                                }
+                            }
+                            .padding(.vertical, 2)
                         }
                     }
+                    .padding(.vertical, 4)
+                    
+                    // App layout
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("App Layout")
+                            .font(.system(size: 15, weight: .semibold))
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 112), spacing: 8)], alignment: .leading, spacing: 8) {
+                            ForEach(LCAppLayoutMode.allCases) { mode in
+                                Button {
+                                    withAnimation { theme.appLayout = mode }
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: mode.systemImage)
+                                        Text(mode.rawValue)
+                                    }
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(theme.appLayout == mode ? Color.white : Color.primary)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(theme.appLayout == mode ? theme.accent : Color(UIColor.secondarySystemFill))
+                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
                     Toggle(isOn: $theme.doubleTapStatusBarToExit) {
                         Text("lc.settings.interface.doubleTapStatusBarToExit".loc)
                     }
@@ -274,6 +335,21 @@ struct LCSettingsView: View {
                     Text("lc.settings.interface".loc)
                 } footer: {
                     Text("lc.settings.dynamicColors.desc".loc)
+                }
+                
+                Section {
+                    Toggle(isOn: $theme.springBoardShellEnabled) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("SpringBoard Mode")
+                            Text("Full-screen iOS home screen with dock, folders & widgets")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Home Screen")
+                } footer: {
+                    Text("Replaces the tab bar with a SpringBoard home: pages, dock, folders, Spotlight search and app switcher. Turn it off again from Settings inside the home screen.")
                 }
                 
                 Section {
@@ -365,25 +441,56 @@ struct LCSettingsView: View {
                     Text("About Fork and the Fork's Owner")
                 }
                 
-                Text(LCUtils.getVersionInfo())
-                    .foregroundStyle(.gray)
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .center)
-                    .contentShape(Rectangle())
-                    .listRowBackground(Color.clear)
-                    .onTapGesture(count: 5) {
-                        withAnimation { sharedModel.developerMode = true }
-                    }
+                Section {
+                    Text(LCUtils.getVersionInfo())
+                        .foregroundStyle(.gray)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .center)
+                        .contentShape(Rectangle())
+                        .onTapGesture(count: 5) {
+                            withAnimation { sharedModel.developerMode = true }
+                        }
+                }
+                .listRowBackground(Color.clear)
                 
                 if sharedModel.developerMode {
-                    LCDeveloperSettingsSection(
-                        onExportCert: { export() },
-                        onExportDyld: { exportDyld() },
-                        onNukeSideStore: { Task { await nukeSideStore() } },
-                        onExportMainBundle: { exportMainBundle() },
-                        onResetSymbolOffsets: { resetSymbolOffsets() },
-                        onShowFLEX: { presentFLEXOverlay() },
-                        onHide: { withAnimation { sharedModel.developerMode = false } }
-                    )
+                    Section {
+                        Toggle(isOn: $injectToLCItelf) {
+                            Text("lc.settings.injectLCItself".loc)
+                        }
+                        Toggle(isOn: $ignoreJITOnLaunch) {
+                            Text("lc.settings.dev.ignoreJIT".loc)
+                        }
+                        Toggle(isOn: $keepSelectedWhenQuit) {
+                            Text("lc.settings.dev.keepSelected".loc)
+                        }
+                        Toggle(isOn: $waitForDebugger) {
+                            Text("lc.settings.dev.waitForDebugger".loc)
+                        }
+                        Toggle(isOn: $sharePrivateDataWithLiveProcess) {
+                            Text("lc.settings.dev.sharePrivateData".loc)
+                        }
+                        Toggle(isOn: $disableLiveProcessWatchdog) {
+                            Text("lc.settings.dev.disableWatchdog".loc)
+                        }
+                    } header: {
+                        Text("lc.settings.dev.title".loc)
+                    } footer: {
+                        Text("lc.settings.injectLCItselfDesc".loc)
+                    }
+                    
+                    Section {
+                        Button { export() } label: { Text("lc.settings.dev.exportCert".loc) }
+                        Button { exportDyld() } label: { Text("lc.settings.dev.exportDyld".loc) }
+                        Button { exportMainBundle() } label: { Text("lc.settings.dev.exportMainBundle".loc) }
+                        Button { resetSymbolOffsets() } label: { Text("lc.settings.dev.resetSymbolOffsets".loc) }
+                        Button { presentFLEXOverlay() } label: { Text("lc.settings.dev.showFLEX".loc) }
+                            .disabled(NSClassFromString("FLEXManager") == nil)
+                        Button(role: .destructive) { Task { await nukeSideStore() } } label: { Text("lc.settings.dev.nukeSideStore".loc) }
+                    }
+                    
+                    Section {
+                        Button { withAnimation { sharedModel.developerMode = false } } label: { Text("lc.settings.dev.hide".loc) }
+                    }
                 }
             }
             .navigationBarTitle("lc.tabView.settings".loc)

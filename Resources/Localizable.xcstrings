@@ -6732,6 +6732,17 @@
         }
       }
     },
+    "lc.appSettings.fixFilePickerDesc": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legacy fix for apps whose file picker fails to open or read the files you pick. It links the app's Inbox folder so picked files can be found. Try \"Fix File Picker\" above first."
+          }
+        }
+      }
+    },
     "lc.appSettings.fixFilePickerNew": {
       "comment": "new file picker fix",
       "extractionState": "stale",

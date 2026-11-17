@@ -101,6 +101,37 @@ struct LCUpdatesView: View {
         Task { await updateAll() }
     }
 
+    @ObservedObject private var theme = LCTheme.shared
+
+    @ViewBuilder
+    private var updateRows: some View {
+        ForEach(updateEntries) { entry in
+            let bundleId         = entry.app.appInfo.bundleIdentifier() ?? ""
+            let isQueued         = queuedBundleIds.contains(bundleId)
+            UpdateBannerView(
+                app: entry.app,
+                newVersion: entry.newVersion,
+                isQueued: isQueued,
+                isMultiSelectMode: isMultiSelectMode,
+                isSelected: selectedEntryIds.contains(entry.id),
+                layout: theme.appLayout,
+                onUpdate: {
+                    queueUpdate(entry: entry)
+                },
+                onRequestIgnore: {
+                    ignoreConfirmEntry = entry
+                },
+                onToggleSelect: {
+                    if selectedEntryIds.contains(entry.id) {
+                        selectedEntryIds.remove(entry.id)
+                    } else {
+                        selectedEntryIds.insert(entry.id)
+                    }
+                }
+            )
+        }
+    }
+
     // ── Body ──────────────────────────────────────────────────────────────────
 
     var body: some View {
@@ -128,30 +159,15 @@ struct LCUpdatesView: View {
                         .frame(maxWidth: .infinity, minHeight: 300)
 
                     } else {
-                        VStack(spacing: LCDesign.Spacing.list) {
-                            ForEach(updateEntries) { entry in
-                                let bundleId         = entry.app.appInfo.bundleIdentifier() ?? ""
-                                let isQueued         = queuedBundleIds.contains(bundleId)
-                                UpdateBannerView(
-                                    app: entry.app,
-                                    newVersion: entry.newVersion,
-                                    isQueued: isQueued,
-                                    isMultiSelectMode: isMultiSelectMode,
-                                    isSelected: selectedEntryIds.contains(entry.id),
-                                    onUpdate: {
-                                        queueUpdate(entry: entry)
-                                    },
-                                    onRequestIgnore: {
-                                        ignoreConfirmEntry = entry
-                                    },
-                                    onToggleSelect: {
-                                        if selectedEntryIds.contains(entry.id) {
-                                            selectedEntryIds.remove(entry.id)
-                                        } else {
-                                            selectedEntryIds.insert(entry.id)
-                                        }
-                                    }
-                                )
+                        Group {
+                            if theme.appLayout == .grid || theme.appLayout == .springboard {
+                                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                                    updateRows
+                                }
+                            } else {
+                                VStack(spacing: theme.appLayout == .compact ? 8 : LCDesign.Spacing.list) {
+                                    updateRows
+                                }
                             }
                         }
                         .id(ignoreRefreshTick)
@@ -615,6 +631,8 @@ private struct UpdateBannerView: View {
     let onRequestIgnore: () -> Void
     /// Called when this banner is tapped while in multiselect mode.
     let onToggleSelect: () -> Void
+    /// Apps-tab layout (List / Grid / Compact) so Updates matches the rest of the app.
+    let layout: LCAppLayoutMode
 
     @AppStorage("dynamicColors", store: LCUtils.appGroupUserDefault) var dynamicColors = true
     @AppStorage("darkModeIcon",  store: LCUtils.appGroupUserDefault) var darkModeIcon  = false
@@ -628,6 +646,7 @@ private struct UpdateBannerView: View {
          isQueued: Bool,
          isMultiSelectMode: Bool = false,
          isSelected: Bool = false,
+         layout: LCAppLayoutMode = .list,
          onUpdate: @escaping () -> Void,
          onRequestIgnore: @escaping () -> Void,
          onToggleSelect: @escaping () -> Void = {}) {
@@ -636,6 +655,7 @@ private struct UpdateBannerView: View {
         self.isQueued   = isQueued
         self.isMultiSelectMode = isMultiSelectMode
         self.isSelected = isSelected
+        self.layout     = layout
         self.onUpdate   = onUpdate
         self.onRequestIgnore = onRequestIgnore
         self.onToggleSelect = onToggleSelect
@@ -654,7 +674,7 @@ private struct UpdateBannerView: View {
         RoundedRectangle(cornerRadius: LCDesign.Radius.card, style: .continuous)
     }
 
-    var body: some View {
+    private var listLayout: some View {
         HStack {
             // Left: icon + text info
             HStack(spacing: 12) {
@@ -735,6 +755,89 @@ private struct UpdateBannerView: View {
         .padding(.horizontal, LCDesign.Spacing.cardInset)
         .padding(.vertical, 10)
         .frame(minHeight: LCDesign.Size.bannerHeight)
+    }
+
+    private func iconView(size: CGFloat, radius: CGFloat) -> some View {
+        Image(uiImage: icon)
+            .resizable()
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func actionControl(width: CGFloat, height: CGFloat) -> some View {
+        if isMultiSelectMode {
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 22))
+                .foregroundColor(isSelected ? tintColor : .secondary)
+        } else if isQueued {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 24))
+                .foregroundColor(tintColor)
+        } else {
+            Button(action: onUpdate) {
+                Text("lc.updates.update".loc)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.1)
+                    .frame(width: width, height: height)
+            }
+            .buttonStyle(LCPressScaleButtonStyle())
+            .background(Capsule().fill(tintColor))
+            .clipShape(Capsule())
+        }
+    }
+
+    private var compactLayout: some View {
+        HStack(spacing: 12) {
+            iconView(size: 36, radius: 9)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(app.appInfo.displayName())
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                Text("\(app.appInfo.version() ?? "?") → \(newVersion.version)")
+                    .font(.system(size: 11).monospacedDigit())
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+            .allowsHitTesting(false)
+            Spacer(minLength: 8)
+            actionControl(width: 64, height: 28)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+    }
+
+    private var gridLayout: some View {
+        VStack(spacing: 8) {
+            iconView(size: 56, radius: 14)
+            Text(app.appInfo.displayName())
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+            Text("\(app.appInfo.version() ?? "?") → \(newVersion.version)")
+                .font(.system(size: 10).monospacedDigit())
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+            actionControl(width: 72, height: 28)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: 150)
+    }
+
+    @ViewBuilder
+    private var layoutContent: some View {
+        switch layout {
+        case .list: listLayout
+        case .compact: compactLayout
+        case .grid, .springboard: gridLayout
+        }
+    }
+
+    var body: some View {
+        layoutContent
         .animation(.easeInOut(duration: 0.2), value: isQueued)
         .animation(.easeInOut(duration: 0.2), value: isMultiSelectMode)
         .background {

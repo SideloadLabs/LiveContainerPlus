@@ -128,6 +128,16 @@ struct LCTweakFolderView : View {
     
     var body: some View {
         List {
+            if isRoot && !isCopyMode {
+                Section {
+                    LCChromeHeader(
+                        title: "lc.tabView.tweaks".loc,
+                        subtitle: "Inject dylibs & frameworks"
+                    )
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                }
+            }
             if moveContext.pendingMoveItemURL != nil {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
