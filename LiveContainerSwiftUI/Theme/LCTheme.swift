@@ -9,37 +9,6 @@ import SwiftUI
 import UIKit
 import Combine
 
-// MARK: - Accent
-
-enum LCAccentPreset: String, CaseIterable, Identifiable {
-    /// The app's original accent colour (Assets.xcassets/AccentColor). This is the default.
-    case system = "Default"
-    case orange = "Orange"
-    case blue = "Blue"
-    case indigo = "Indigo"
-    case teal = "Teal"
-    case green = "Green"
-    case pink = "Pink"
-    case purple = "Purple"
-    case red = "Red"
-    
-    var id: String { rawValue }
-    
-    var color: Color {
-        switch self {
-        case .system: return Color.accentColor
-        case .orange: return Color(red: 1.00, green: 0.42, blue: 0.21)
-        case .blue:   return Color(red: 0.20, green: 0.55, blue: 0.95)
-        case .indigo: return Color(red: 0.35, green: 0.40, blue: 0.95)
-        case .teal:   return Color(red: 0.10, green: 0.72, blue: 0.68)
-        case .green:  return Color(red: 0.18, green: 0.72, blue: 0.40)
-        case .pink:   return Color(red: 0.92, green: 0.30, blue: 0.55)
-        case .purple: return Color(red: 0.62, green: 0.35, blue: 0.95)
-        case .red:    return Color(red: 0.92, green: 0.28, blue: 0.28)
-        }
-    }
-}
-
 // MARK: - App layout
 
 enum LCAppLayoutMode: String, CaseIterable, Identifiable {
@@ -67,25 +36,9 @@ final class LCTheme: ObservableObject {
     
     private let defaults: UserDefaults = LCUtils.appGroupUserDefault
     
-    @Published var accentPreset: LCAccentPreset {
-        didSet {
-            defaults.set(accentPreset.rawValue, forKey: "LCAccentPreset")
-            objectWillChange.send()
-        }
-    }
-    
     @Published var doubleTapStatusBarToExit: Bool {
         didSet {
             defaults.set(doubleTapStatusBarToExit, forKey: "LCDoubleTapStatusBarToExit")
-        }
-    }
-    
-    /// Full SpringBoard home shell (replaces the tab bar with a home screen, dock and folders).
-    @Published var springBoardShellEnabled: Bool {
-        didSet {
-            LCUtils.appGroupUserDefault.set(springBoardShellEnabled, forKey: "LCSpringBoardShellEnabled")
-            defaults.set(springBoardShellEnabled, forKey: "LCSpringBoardShellEnabled")
-            objectWillChange.send()
         }
     }
     
@@ -96,22 +49,8 @@ final class LCTheme: ObservableObject {
         }
     }
     
-    var accent: Color { accentPreset.color }
-    
-    /// Contrasting colour for secondary header tags.
-    var accentOpposite: Color {
-        switch accentPreset {
-        case .system: return Color(red: 1.00, green: 0.45, blue: 0.20)
-        case .orange: return Color(red: 0.25, green: 0.55, blue: 0.95)
-        case .blue:   return Color(red: 1.00, green: 0.45, blue: 0.20)
-        case .indigo: return Color(red: 0.95, green: 0.75, blue: 0.15)
-        case .teal:   return Color(red: 0.92, green: 0.30, blue: 0.45)
-        case .green:  return Color(red: 0.62, green: 0.35, blue: 0.95)
-        case .pink:   return Color(red: 0.10, green: 0.72, blue: 0.55)
-        case .purple: return Color(red: 0.18, green: 0.72, blue: 0.40)
-        case .red:    return Color(red: 0.10, green: 0.70, blue: 0.75)
-        }
-    }
+    /// The app's original accent colour (AccentColor asset) — no custom accent presets.
+    var accent: Color { Color.accentColor }
     
     var pageBackground: Color {
         Color(UIColor { t in
@@ -143,28 +82,16 @@ final class LCTheme: ObservableObject {
     var danger:  Color { Color(red: 0.92, green: 0.28, blue: 0.28) }
     
     private init() {
-        let raw = defaults.string(forKey: "LCAccentPreset") ?? LCAccentPreset.system.rawValue
-        self.accentPreset = LCAccentPreset(rawValue: raw) ?? .system
-        
         if defaults.object(forKey: "LCDoubleTapStatusBarToExit") == nil {
             self.doubleTapStatusBarToExit = true
         } else {
             self.doubleTapStatusBarToExit = defaults.bool(forKey: "LCDoubleTapStatusBarToExit")
         }
         
-        if let sbVal = LCUtils.appGroupUserDefault.object(forKey: "LCSpringBoardShellEnabled") as? Bool {
-            self.springBoardShellEnabled = sbVal
-        } else {
-            self.springBoardShellEnabled = defaults.bool(forKey: "LCSpringBoardShellEnabled")
-        }
-        
         let layoutRaw = defaults.string(forKey: "LCAppLayoutMode") ?? LCAppLayoutMode.list.rawValue
         self.appLayout = LCAppLayoutMode(rawValue: layoutRaw) ?? .list
     }
     
-    func setAccent(_ preset: LCAccentPreset) {
-        accentPreset = preset
-    }
 }
 
 // MARK: - Modifiers

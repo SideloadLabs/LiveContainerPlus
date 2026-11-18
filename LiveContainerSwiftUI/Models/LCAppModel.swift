@@ -1408,6 +1408,16 @@ class LCAppModel: ObservableObject, Hashable, @unchecked Sendable {
             return
         }
         
+        // Apps whose bundle is missing (not installed / removed / stale entry) used to crash
+        // on force unwraps further down. Fail with a normal error instead.
+        if !(appInfo is BuiltInSideStoreAppInfo) {
+            guard let installedBundlePath = appInfo.bundlePath(),
+                  FileManager.default.fileExists(atPath: installedBundlePath),
+                  appInfo.bundleIdentifier() != nil else {
+                throw "lc.appList.appNotFoundError".loc
+            }
+        }
+        
         if uiContainers.isEmpty {
             let newName = NSUUID().uuidString
             let newContainer = LCContainer(folderName: newName, name: newName, isShared: uiIsShared)
@@ -1416,7 +1426,7 @@ class LCAppModel: ObservableObject, Hashable, @unchecked Sendable {
                 uiSelectedContainer = newContainer;
             }
             appInfo.containers = uiContainers;
-            newContainer.makeLCContainerInfoPlist(appIdentifier: appInfo.bundleIdentifier()!, keychainGroupId: Int.random(in: 0..<SharedModel.keychainAccessGroupCount))
+            newContainer.makeLCContainerInfoPlist(appIdentifier: appInfo.bundleIdentifier() ?? bundleIdentifier, keychainGroupId: Int.random(in: 0..<SharedModel.keychainAccessGroupCount))
             switchAddonSettingsContainer(to: newName)
         }
         if let containerFolderName {
@@ -1570,8 +1580,8 @@ class LCAppModel: ObservableObject, Hashable, @unchecked Sendable {
             } else if shouldMultitask, #available(iOS 16.0, *) {
                 try await LCUtils.launchMultitaskGuestApp(appInfo.displayName())
             } else {
-                if #available(iOS 26.0, *), FileManager.default.fileExists(atPath: "\(appInfo.bundlePath()!)/Frameworks/MetalANGLE.framework/MetalANGLE") {
-                    let fileContents = "\(appInfo.bundlePath()!)/Frameworks/MetalANGLE.framework/MetalANGLE".data(using: .utf8)
+                if #available(iOS 26.0, *), FileManager.default.fileExists(atPath: "\(appInfo.bundlePath() ?? "")/Frameworks/MetalANGLE.framework/MetalANGLE") {
+                    let fileContents = "\(appInfo.bundlePath() ?? "")/Frameworks/MetalANGLE.framework/MetalANGLE".data(using: .utf8)
                     let fileURL = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0].appendingPathComponent("preloadLibraries.txt")
                     try fileContents?.write(to: fileURL)
                 }

@@ -39,18 +39,6 @@ struct LCTabView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
         Group {
-            if theme.springBoardShellEnabled {
-                ZStack {
-                    LCSpringBoardShellView()
-                        .environmentObject(sharedModel)
-                    // Keep the app list alive (invisible) so IPA install notifications still run.
-                    appListView
-                        .frame(width: 0, height: 0)
-                        .opacity(0)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
-            } else {
                 TabView(selection: Binding(
                     get: { sharedModel.selectedTab },
                     set: { if !sharedModel.isMultiSelectMode { sharedModel.selectedTab = $0 } }
@@ -86,9 +74,7 @@ struct LCTabView: View {
                         }
                         .tag(LCTabIdentifier.settings)
                 }
-            }
         }
-        .tint(theme.accent)
         .onAppear {
             let appearance = UITabBarAppearance()
             appearance.configureWithDefaultBackground()
@@ -98,7 +84,6 @@ struct LCTabView: View {
             }
         }
 
-        .animation(.easeInOut(duration: 0.2), value: theme.accentPreset)
         .downloadAlert(helper: downloadHelper)
         .environmentObject(downloadHelper)
         .alert("lc.common.error".loc, isPresented: $errorShow){

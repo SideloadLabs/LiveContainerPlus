@@ -15,7 +15,7 @@
 @end
 
 static NSTimeInterval LCLastStatusBarTapTime = 0;
-static const NSTimeInterval LCDoubleTapInterval = 0.35;
+static const NSTimeInterval LCDoubleTapInterval = 0.6; // generous: real double taps are often slower than 0.35s
 
 @implementation LCStatusBarManager
 
@@ -40,7 +40,10 @@ static const NSTimeInterval LCDoubleTapInterval = 0.35;
         NSTimeInterval now = CFAbsoluteTimeGetCurrent();
         if (LCLastStatusBarTapTime > 0 && (now - LCLastStatusBarTapTime) <= LCDoubleTapInterval) {
             LCLastStatusBarTapTime = 0;
-            [self lc_handleDoubleTapExit];
+            __weak typeof(self) weakSelf = self;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.08 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                [weakSelf lc_handleDoubleTapExit];
+            });
             return;
         }
         LCLastStatusBarTapTime = now;

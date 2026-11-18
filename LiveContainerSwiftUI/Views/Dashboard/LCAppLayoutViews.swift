@@ -7,55 +7,6 @@
 
 import SwiftUI
 
-// MARK: - Section header
-
-struct LCAppsSectionHeader: View {
-    @ObservedObject private var theme = LCTheme.shared
-    var appCount: Int
-    
-    var body: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("My Apps")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                Text(appCount == 0 ? "No apps yet" : "\(appCount) installed")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(theme.secondaryText)
-            }
-            Spacer(minLength: 0)
-            
-            // Layout segmented control
-            HStack(spacing: 0) {
-                ForEach(LCAppLayoutMode.allCases) { mode in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            theme.appLayout = mode
-                        }
-                    } label: {
-                        Image(systemName: mode.systemImage)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(theme.appLayout == mode ? Color.white : theme.secondaryText)
-                            .frame(width: 34, height: 28)
-                            .background(theme.appLayout == mode ? theme.accent : Color.clear)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(mode.rawValue)
-                }
-            }
-            .padding(3)
-            .background(theme.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .stroke(theme.cardBorder, lineWidth: 1)
-            )
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 6)
-        .padding(.bottom, 2)
-    }
-}
-
 // MARK: - Empty state
 
 struct LCAppsEmptyState: View {

@@ -1639,7 +1639,7 @@ static id<LCMultitaskXPCServiceProtocol> server;
 
 - (void)lc_handleTapAction:(UIAction *)action {
     static NSTimeInterval lastTap = 0;
-    static const NSTimeInterval kWindow = 0.35;
+    static const NSTimeInterval kWindow = 0.6; // generous: real double taps are often slower than 0.35s
 
     BOOL enabled = YES;
     Class sharedUtils = NSClassFromString(@"LCSharedUtils");
@@ -1664,10 +1664,14 @@ static id<LCMultitaskXPCServiceProtocol> server;
             UIImpactFeedbackGenerator *gen =
                 [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleMedium];
             [gen impactOccurred];
-            if ([sharedUtils respondsToSelector:@selector(launchToGuestAppWithClassicMode:)]) {
-                // classicMode 0 = relaunch LiveContainer
-                [sharedUtils launchToGuestAppWithClassicMode:0];
-            }
+            // Leave the status-bar tap handler first, then exit (calling it inline from the
+            // handler could be dropped).
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.08 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                if ([sharedUtils respondsToSelector:@selector(launchToGuestAppWithClassicMode:)]) {
+                    // classicMode 0 = relaunch LiveContainer
+                    [sharedUtils launchToGuestAppWithClassicMode:0];
+                }
+            });
             return; // consume double-tap
         }
         lastTap = now;
@@ -1684,7 +1688,7 @@ static void LCGuestDoubleTapStatusBarInit(void) {
     // Only when running as a guest app inside LiveContainer
     if (!NSUserDefaults.lcGuestAppId) return;
 
-    if (@available(iOS 16.0, *)) {
+    if (@available(iOS 15.0, *)) {
         Class cls = NSClassFromString(@"UIStatusBarManager");
         if (!cls) return;
         // Use project swizzle() helper from utils.h

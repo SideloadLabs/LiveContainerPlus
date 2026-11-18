@@ -57,6 +57,7 @@ struct LCSettingsView: View {
     
     @StateObject private var certificateImportAlert = YesNoHelper()
     @StateObject private var certificateImportFromBuiltInSideStoreAlert = YesNoHelper()
+    @State private var devScreenActive = false
     @StateObject private var certificateRemoveAlert = YesNoHelper()
     @StateObject private var certificateImportFileAlert = AlertHelper<URL>()
     @StateObject private var certificateImportPasswordAlert = InputHelper()
@@ -97,14 +98,6 @@ struct LCSettingsView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section {
-                    LCChromeHeader(
-                        title: "lc.tabView.settings".loc,
-                        subtitle: "Signing · Appearance · Runtime"
-                    )
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                }
                 if sharedModel.multiLCStatus != 2 {
                     Section{
                         if !certificateDataFound {
@@ -261,48 +254,6 @@ struct LCSettingsView: View {
                             Text("lc.settings.darkModeIcon".loc)
                         }
                     }
-                    // Accent colour
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Accent Color")
-                                .font(.system(size: 15, weight: .semibold))
-                            Spacer()
-                            Text(theme.accentPreset.rawValue)
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(theme.accent)
-                                .id(theme.accentPreset)
-                        }
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 10) {
-                                ForEach(LCAccentPreset.allCases) { preset in
-                                    Button {
-                                        withAnimation(.easeInOut(duration: 0.15)) {
-                                            theme.setAccent(preset)
-                                        }
-                                    } label: {
-                                        ZStack {
-                                            Circle()
-                                                .fill(preset.color)
-                                                .frame(width: 28, height: 28)
-                                            if theme.accentPreset == preset {
-                                                Circle()
-                                                    .strokeBorder(Color.white, lineWidth: 2)
-                                                    .frame(width: 28, height: 28)
-                                                Image(systemName: "checkmark")
-                                                    .font(.system(size: 11, weight: .bold))
-                                                    .foregroundStyle(.white)
-                                            }
-                                        }
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel(preset.rawValue)
-                                }
-                            }
-                            .padding(.vertical, 2)
-                        }
-                    }
-                    .padding(.vertical, 4)
-                    
                     // App layout
                     VStack(alignment: .leading, spacing: 10) {
                         Text("App Layout")
@@ -338,21 +289,6 @@ struct LCSettingsView: View {
                 }
                 
                 Section {
-                    Toggle(isOn: $theme.springBoardShellEnabled) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("SpringBoard Mode")
-                            Text("Full-screen iOS home screen with dock, folders & widgets")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                } header: {
-                    Text("Home Screen")
-                } footer: {
-                    Text("Replaces the tab bar with a SpringBoard home: pages, dock, folders, Spotlight search and app switcher. Turn it off again from Settings inside the home screen.")
-                }
-                
-                Section {
                     Toggle(isOn: $silentSwitchApp) {
                         Text("lc.settings.silentSwitchApp".loc)
                     }
@@ -371,14 +307,6 @@ struct LCSettingsView: View {
                     }
                 } footer: {
                     Text("lc.settings.dontSignDesc".loc)
-                }
-
-                Section {
-                    Button {
-                        clearNotifications()
-                    } label: {
-                        Text("lc.settings.clearNotifications".loc)
-                    }
                 }
 
                 Section {
@@ -454,51 +382,36 @@ struct LCSettingsView: View {
                 
                 if sharedModel.developerMode {
                     Section {
-                        Toggle(isOn: $injectToLCItelf) {
-                            Text("lc.settings.injectLCItself".loc)
+                        NavigationLink(isActive: $devScreenActive) {
+                            LCDeveloperSettingsView(
+                                errorShow: $errorShow,
+                                errorInfo: $errorInfo,
+                                successShow: $successShow,
+                                successInfo: $successInfo,
+                                onExportCert: { export() },
+                                onExportDyld: { exportDyld() },
+                                onExportMainBundle: { exportMainBundle() },
+                                onResetSymbolOffsets: { resetSymbolOffsets() },
+                                onShowFLEX: { presentFLEXOverlay() },
+                                onNukeSideStore: { Task { await nukeSideStore() } },
+                                onHide: {
+                                    devScreenActive = false
+                                    withAnimation { sharedModel.developerMode = false }
+                                }
+                            )
+                        } label: {
+                            Text("lc.settings.dev.title".loc)
                         }
-                        Toggle(isOn: $ignoreJITOnLaunch) {
-                            Text("lc.settings.dev.ignoreJIT".loc)
-                        }
-                        Toggle(isOn: $keepSelectedWhenQuit) {
-                            Text("lc.settings.dev.keepSelected".loc)
-                        }
-                        Toggle(isOn: $waitForDebugger) {
-                            Text("lc.settings.dev.waitForDebugger".loc)
-                        }
-                        Toggle(isOn: $sharePrivateDataWithLiveProcess) {
-                            Text("lc.settings.dev.sharePrivateData".loc)
-                        }
-                        Toggle(isOn: $disableLiveProcessWatchdog) {
-                            Text("lc.settings.dev.disableWatchdog".loc)
-                        }
-                    } header: {
-                        Text("lc.settings.dev.title".loc)
-                    } footer: {
-                        Text("lc.settings.injectLCItselfDesc".loc)
-                    }
-                    
-                    Section {
-                        Button { export() } label: { Text("lc.settings.dev.exportCert".loc) }
-                        Button { exportDyld() } label: { Text("lc.settings.dev.exportDyld".loc) }
-                        Button { exportMainBundle() } label: { Text("lc.settings.dev.exportMainBundle".loc) }
-                        Button { resetSymbolOffsets() } label: { Text("lc.settings.dev.resetSymbolOffsets".loc) }
-                        Button { presentFLEXOverlay() } label: { Text("lc.settings.dev.showFLEX".loc) }
-                            .disabled(NSClassFromString("FLEXManager") == nil)
-                        Button(role: .destructive) { Task { await nukeSideStore() } } label: { Text("lc.settings.dev.nukeSideStore".loc) }
-                    }
-                    
-                    Section {
-                        Button { withAnimation { sharedModel.developerMode = false } } label: { Text("lc.settings.dev.hide".loc) }
                     }
                 }
             }
             .navigationBarTitle("lc.tabView.settings".loc)
-            .alert("lc.common.error".loc, isPresented: $errorShow){
+            // While the developer screen is open it shows these alerts itself.
+            .alert("lc.common.error".loc, isPresented: Binding(get: { errorShow && !devScreenActive }, set: { errorShow = $0 })){
             } message: {
                 Text(errorInfo)
             }
-            .alert("lc.common.success".loc, isPresented: $successShow){
+            .alert("lc.common.success".loc, isPresented: Binding(get: { successShow && !devScreenActive }, set: { successShow = $0 })){
             } message: {
                 Text(successInfo)
             }
@@ -585,17 +498,6 @@ struct LCSettingsView: View {
     
     func openTwitter() {
         UIApplication.shared.open(URL(string: "https://twitter.com/khanhduytran0")!)
-    }
-
-    func clearNotifications() {
-        let notificationCenter = UNUserNotificationCenter.current()
-        notificationCenter.removeAllDeliveredNotifications()
-        notificationCenter.removeAllPendingNotificationRequests()
-        if #available(iOS 16.0, *) {
-            notificationCenter.setBadgeCount(0)
-        } else {
-            UIApplication.shared.applicationIconBadgeNumber = 0
-        }
     }
 
     func openForkOwnerGitHub() {

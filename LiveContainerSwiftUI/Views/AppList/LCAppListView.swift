@@ -486,10 +486,6 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 .hidden()
                 .disabled(isMultiSelectMode)
                 
-                if sharedModel.multiLCStatus != 2 && !isMultiSelectMode {
-                    LCAppsSectionHeader(appCount: filteredApps.count)
-                }
-                
                 appList(apps: filteredApps, hidden: false, gridID: "apps")
                     .padding()
                     .animation(searchContext.isTyping ? nil : .easeInOut, value: filteredApps)
